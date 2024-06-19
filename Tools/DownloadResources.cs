@@ -6,10 +6,11 @@ namespace ArknightsWorkshop.Tools;
 
 public class DownloadResources(Config config) : Tool
 {
-    private static readonly string DatTempDir = "dat";
-    private static readonly string OutputDir = "output";
-    private static readonly string ProgressDir = "progress";
+    private static readonly string DatTempDir = "raw_resources";
+    private static readonly string OutputDir = "resources";
+    private static readonly string ProgressDir = "downloading_progress";
     private static readonly string ApkFileName = "game.apk";
+    private static readonly string DownloadFinishTag = "downloaded";
 
     private static readonly string ChinaApkUrl = "https://ak.hypergryph.com/downloads/android_lastest";
     private static readonly string ApkAssetsPrefix = "assets/AB/Android/";
@@ -71,7 +72,8 @@ public class DownloadResources(Config config) : Tool
         FetchApk();
 
         if (cancel.IsCancellationRequested) return;
-        Util.TouchFile(Path.Combine(folder, "complete"));
+        Util.TouchFile(Path.Combine(folder, DownloadFinishTag));
+        Directory.Delete(Path.Combine(folder, ProgressDir), true);
         if (!config.KeepIntermediateData)
             Directory.Delete(Path.Combine(folder, DatTempDir));
     }
