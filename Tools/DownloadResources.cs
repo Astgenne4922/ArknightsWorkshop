@@ -1,48 +1,58 @@
 ﻿using System.Net.Http.Json;
-using ArknightsWorkshop.Data;
 using KiDev.StreamCopy;
 
 namespace ArknightsWorkshop.Tools;
 
 public class DownloadResources(Config config) : Tool
 {
-    private static readonly string DatTempDir = "raw_resources";
-    private static readonly string OutputDir = "resources";
-    private static readonly string ProgressDir = "downloading_progress";
     private static readonly string ApkFileName = "game.apk";
-    private static readonly string DownloadFinishTag = "downloaded";
-
     private static readonly string ChinaApkUrl = "https://ak.hypergryph.com/downloads/android_lastest";
     private static readonly string ApkAssetsPrefix = "assets/AB/Android/";
 
     public override string Name => "Download and unzip all resources";
 
-    private string folder = Path.Combine(config.WorkingDirectory, "assets");
-    private bool useGlobalServer;
+    private string folder = Path.Combine(config.WorkingDirectory, Folders.Assets);
+    private bool useGlobalServer, simplerProgress;
     private PackInfoData[] processes = null!;
     private bool finishedDownloading = false;
     private Semaphore httpLimit = new(config.MaxConcurrentDownloads, config.MaxConcurrentDownloads);
     private CancellationToken cancel;
 
-    private void UserInput()
+    private bool UserInput()
     {
-        Console.Write("Use global (Y -> Global; N -> China)? ");
-        useGlobalServer = Console.ReadKey(true).Key == ConsoleKey.Y;
-        Console.WriteLine(useGlobalServer ? "Y" : "N");
+        var serv = CLIArgs.ParamRaw("server");
+        if(serv is not null)
+        {
+            if (serv == "Global")
+                useGlobalServer = true;
+            else if (serv == "China")
+                useGlobalServer = false;
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Invalid server: {serv}");
+                Console.ResetColor();
+                return false;
+            }
+        }
+        else
+            useGlobalServer = ConsoleUI.ChooseOne("Select server", ["Global", "China"]) == 0;
+        simplerProgress = CLIArgs.HasKey("simple_progress");
+        return true;
     }
 
-    public override async Task Run(CancellationToken cancel)
+    public override async ValueTask Run(CancellationToken cancel)
     {
         this.cancel = cancel;
-        UserInput();
+        if (!UserInput()) return;
         if(cancel.IsCancellationRequested) return;
 
         // Fetch game info, create directories for downloaded assets
         var info = await GameServerInfo.Fetch(useGlobalServer ? GameServerInfo.Global : GameServerInfo.China);
         Console.WriteLine($"Current version: {info.ResourceVersion}");
         folder = Path.Combine(folder, $"{(useGlobalServer ? "GL" : "CN")}_{info.ResourceVersion}");
-        Directory.CreateDirectory(Path.Combine(folder, DatTempDir));
-        Directory.CreateDirectory(Path.Combine(folder, OutputDir));
+        Directory.CreateDirectory(Path.Combine(folder, Folders.RawResources));
+        Directory.CreateDirectory(Path.Combine(folder, Folders.Resources));
         if (cancel.IsCancellationRequested) return;
 
         // Fetch available packs
@@ -56,7 +66,7 @@ public class DownloadResources(Config config) : Tool
         processes = new PackInfoData[list.PackInfos.Length];
         for (var i = 0; i < processes.Length; i++)
         {
-            var pos = new DownloadProgressStorage(Path.Combine(folder, ProgressDir, list.PackInfos[i].Name));
+            var pos = new DownloadProgressStorage(Path.Combine(folder, Folders.DownloadProgress, list.PackInfos[i].Name));
             processes[i] = new(list.PackInfos[i].Name, list.PackInfos[i].TotalSize, pos);
             var ii = i;
             processes[i].Process = Task.Run(() => DownloadDat(processes[ii], info.AssetsUrl), CancellationToken.None);
@@ -72,15 +82,15 @@ public class DownloadResources(Config config) : Tool
         FetchApk();
 
         if (cancel.IsCancellationRequested) return;
-        Util.TouchFile(Path.Combine(folder, DownloadFinishTag));
-        Directory.Delete(Path.Combine(folder, ProgressDir), true);
+        Util.TouchFile(Path.Combine(folder, Folders.DownloadFinishTag));
+        Directory.Delete(Path.Combine(folder, Folders.DownloadProgress), true);
         if (!config.KeepIntermediateData)
-            Directory.Delete(Path.Combine(folder, DatTempDir));
+            Directory.Delete(Path.Combine(folder, Folders.RawResources));
     }
 
     private void FetchApk()
     {
-        var apkPath = Path.Combine(folder, DatTempDir, ApkFileName);
+        var apkPath = Path.Combine(folder, Folders.RawResources, ApkFileName);
         DownloadProgressStorage process = null!;
         if (useGlobalServer)
         {
@@ -93,7 +103,7 @@ public class DownloadResources(Config config) : Tool
         {
             Util.TouchFile(apkPath);
             using var http = Util.MakeAkClient();
-            process = new(Path.Combine(folder, ProgressDir, ApkFileName));
+            process = new(Path.Combine(folder, Folders.DownloadProgress, ApkFileName));
             if(!process.Done)
             {
                 Task.Run(() =>
@@ -115,7 +125,7 @@ public class DownloadResources(Config config) : Tool
         Console.Write("[apk file] Unpacking... ");
         if(!process.Unpacked)
         {
-            Util.UnpackZip(apkPath, Path.Combine(folder, OutputDir), ApkAssetsPrefix, cancel);
+            Util.UnpackZip(apkPath, Path.Combine(folder, Folders.Resources), ApkAssetsPrefix, cancel);
             if (cancel.IsCancellationRequested) return;
             process.Unpacked = true;
         }
@@ -136,7 +146,7 @@ public class DownloadResources(Config config) : Tool
             else
             {
                 Console.CursorLeft = 0;
-                Console.CursorTop -= processes.Length + 1;
+                Console.CursorTop -= (simplerProgress ? 0 : processes.Length) + 1;
             }
 
             // Print all pack's info while accumulating total/downloaded size
@@ -145,6 +155,8 @@ public class DownloadResources(Config config) : Tool
             {
                 totalCur += processes[i].Downloading.Position;
                 totalTotal += processes[i].Downloading.Length;
+                if (simplerProgress) continue;
+
                 // Name and status
                 Console.Write($"[{processes[i].Name}] ");
                 if (processes[i].Downloading.Unpacked)
@@ -163,6 +175,7 @@ public class DownloadResources(Config config) : Tool
                     Util.Dump(processes[i].Downloading);
                 }
                 Console.ResetColor();
+
                 // Print padding
                 var pad = Math.Max(0, processes[i].StatusStringLength - Console.CursorLeft);
                 processes[i].StatusStringLength = Math.Max(processes[i].StatusStringLength, Console.CursorLeft);
@@ -175,7 +188,7 @@ public class DownloadResources(Config config) : Tool
 
     private void DownloadDat(PackInfoData data, string assetsUrl)
     {
-        var datPath = Path.Combine(folder, DatTempDir, $"{data.Name}.dat");
+        var datPath = Path.Combine(folder, Folders.RawResources, $"{data.Name}.dat");
         // Download pack from servers
         if(!data.Downloading.Done)
         {
@@ -193,7 +206,7 @@ public class DownloadResources(Config config) : Tool
         // Decompress these packs. They're compressed as .zip
         if (!data.Downloading.Unpacked)
         {
-            Util.UnpackZip(datPath, Path.Combine(folder, OutputDir), "", cancel);
+            Util.UnpackZip(datPath, Path.Combine(folder, Folders.Resources), "", cancel);
             if (cancel.IsCancellationRequested) return;
             if (!config.KeepIntermediateData) File.Delete(datPath);
             data.Downloading.Unpacked = true;

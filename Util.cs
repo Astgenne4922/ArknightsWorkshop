@@ -1,11 +1,12 @@
 ﻿using KiDev.StreamCopy;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 
 namespace ArknightsWorkshop;
 
 public static class Util
 {
-    public static readonly string? ExecutableFolder = 
+    public static readonly string? ExecutableFolder =
         Environment.ProcessPath is null ? null : Path.GetDirectoryName(Environment.ProcessPath);
 
     public static string SizeString(double size)
@@ -31,6 +32,8 @@ public static class Util
     public static void TouchFile(string path)
     {
         if (File.Exists(path)) return;
+        var dir = Path.GetDirectoryName(path);
+        if (dir is not null && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
         File.Create(path).Dispose();
     }
 
@@ -58,19 +61,41 @@ public static class Util
 
     public static void Dump(IPositionStorage data)
     {
-            if (data.Done)
-            {
-                Console.Write("Done. ");
-                return;
-            }
-            if (data.Position == 0)
-            {
-                Console.Write("Waiting... ");
-                return;
-            }
-            Console.Write("Downloading... ");
-            Console.Write(SizeString(data.Position));
-            if (data.Length != 0)
-                Console.Write($"/{SizeString(data.Length)} ({data.Position * 100 / data.Length}%)");
+        if (data.Done)
+        {
+            Console.Write("Done. ");
+            return;
+        }
+        if (data.Position == 0)
+        {
+            Console.Write("Waiting... ");
+            return;
+        }
+        Console.Write("Downloading... ");
+        Console.Write(SizeString(data.Position));
+        if (data.Length != 0)
+            Console.Write($"/{SizeString(data.Length)} ({data.Position * 100 / data.Length}%)");
+    }
+
+    public static void ReadExactlyOldStream(Stream s, byte[] b)
+    {
+        int total = 0;
+        while (total < b.Length)
+        {
+            var read = s.Read(b, total, b.Length - total);
+            if (read == 0) throw new("Reached end of the stream");
+            total += read;
+        }
+    }
+
+    public static string Hex<T>(T value) where T : unmanaged
+    {
+        var bytes = MemoryMarshal.AsBytes(new ReadOnlySpan<T>(ref value));
+        return Convert.ToHexString(bytes);
+    }
+
+    public class Ref<T> where T : class
+    { 
+        public T Value = null!; 
     }
 }
