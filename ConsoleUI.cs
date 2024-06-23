@@ -64,4 +64,51 @@ public static class ConsoleUI
         Console.WriteLine();
         return select;
     }
+
+    public static string? SelectVersion(string workingDir)
+    {
+        var resFolder = Path.Combine(workingDir, Paths.Assets);
+
+        if (!Directory.Exists(resFolder))
+        {
+            NoResError();
+            return null;
+        }
+        var dirs = new DirectoryInfo(resFolder).GetDirectories();
+        if (dirs.Length == 0)
+        {
+            NoResError();
+            return null;
+        }
+        var resNamePrefix = CLIArgs.ParamRaw("res");
+        if (resNamePrefix is null)
+        {
+            var ind = ChooseOne("Select resource version", dirs.Select(d => d.Name));
+            return dirs[ind].Name;
+        }
+        else
+        {
+            var cands = dirs.Where(d => d.Name.StartsWith(resNamePrefix)).ToArray();
+            if (cands.Length != 1)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine(cands.Length switch
+                {
+                    0 => $"No resource version begin with '{resNamePrefix}'",
+                    _ => $"Multiple resource versions begin with '{resNamePrefix}'"
+                });
+                Console.ResetColor();
+                return null;
+            }
+            return cands[0].Name;
+        }
+
+
+        static void NoResError()
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("No resources downloaded.");
+            Console.ResetColor();
+        }
+    }
 }

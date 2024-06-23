@@ -1,18 +1,10 @@
 ﻿using ArknightsWorkshop.Tools.Processors;
 using AssetsTools.NET.Extra;
-using System.Diagnostics;
 
 namespace ArknightsWorkshop.Tools;
 
 public class ProcessResources : Tool
 {
-    private static readonly int ThreadCount =
-#if DEBUG && false
-        1;
-#else
-        Environment.ProcessorCount;
-#endif
-
     public override string Name => "Process resources";
 
     // Need to propagate resource version into 'flatc' processor to select appropriate 'fbs' files
@@ -29,7 +21,7 @@ public class ProcessResources : Tool
     public ProcessResources(Config config)
     {
         this.config = config;
-        resFolder = Path.Combine(config.WorkingDirectory, Folders.Assets);
+        resFolder = Path.Combine(config.WorkingDirectory, Paths.Assets);
         allProcessors = [
             new SoundProcessor(),
             new FlatBuffersProcessor(config, version),
@@ -43,11 +35,11 @@ public class ProcessResources : Tool
         if (!SelectProcessors()) return ValueTask.CompletedTask;
 
         foreach (var proc in processors) proc.Initialize();
-#if RELEASE
-        Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.High;
+#if RELEASE 
+        System.Diagnostics.Process.GetCurrentProcess().PriorityClass = System.Diagnostics.ProcessPriorityClass.High;
 #endif
         var threads = Enumerable
-            .Range(0, ThreadCount)
+            .Range(0, config.MaxProcessingThreads)
             .Select(_ => new Thread(() => ProcessThread(cancel)))
             .ToArray();
         foreach (var thread in threads)
@@ -59,7 +51,7 @@ public class ProcessResources : Tool
         }
         foreach (var thread in threads) thread.Join();
 #if RELEASE
-        Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.Normal;
+        System.Diagnostics.Process.GetCurrentProcess().PriorityClass = System.Diagnostics.ProcessPriorityClass.Normal;
 #endif
         foreach (var proc in processors) proc.Cleanup();
         return ValueTask.CompletedTask;
@@ -67,62 +59,15 @@ public class ProcessResources : Tool
 
     private bool SelectVersion()
     {
-        static void NoResError()
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("No resources downloaded.");
-            Console.ResetColor();
-        }
-
-        if (!Directory.Exists(resFolder))
-        {
-            NoResError();
-            return false;
-        }
-        var dirs = new DirectoryInfo(resFolder).GetDirectories();
-        if (dirs.Length == 0)
-        {
-            NoResError();
-            return false;
-        }
-
-        var resNamePrefix = CLIArgs.ParamRaw("res");
-        if(resNamePrefix is null)
-        { 
-            var ind = ConsoleUI.ChooseOne("Select resource version", dirs.Select(d => d.Name));
-            version.Value = dirs[ind].Name;
-            datFolder = dirs[ind].FullName;
-        }
-        else
-        {
-            var cands = dirs.Where(d => d.Name.StartsWith(resNamePrefix)).ToArray();
-            if(cands.Length != 1)
-            {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine(cands.Length switch
-                {
-                    0 => $"No resource version begin with '{resNamePrefix}'",
-                    _ => $"Multiple resource versions begin with '{resNamePrefix}'"
-                });
-                Console.ResetColor();
-                return false;
-            }
-            version.Value = cands[0].Name;
-            datFolder = cands[0].FullName;
-        }
-        resFolder = Path.Combine(datFolder, Folders.Resources);
-        files = GetFiles(new DirectoryInfo(resFolder))
-            .Select(f => Path.GetRelativePath(resFolder, f.FullName))
+        version.Value = ConsoleUI.SelectVersion(config.WorkingDirectory)!;
+        if (version.Value is null) return false;
+        datFolder = Path.Combine(config.WorkingDirectory, Paths.Assets, version.Value);
+        resFolder = Path.Combine(datFolder, Paths.Resources);
+        files = Util.GetFileTree(resFolder)
+            .Select(f => Path.GetRelativePath(resFolder, f))
             .ToArray();
 
         return true;
-
-        static IEnumerable<FileInfo> GetFiles(FileSystemInfo fs) => fs switch
-        {
-            FileInfo fi => [fi],
-            DirectoryInfo di => di.EnumerateFileSystemInfos().SelectMany(GetFiles),
-            _ => throw new("Neither file nor folder?!"),
-        };
     }
 
     private bool SelectProcessors()

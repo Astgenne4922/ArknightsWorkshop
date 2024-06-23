@@ -10,7 +10,7 @@ var config = Config.Read();
 Tool[] tools = [
     new DownloadResources(config),
     new ProcessResources(config),
-    // more tools here...
+    new GenerateSummaries(config)
 ];
 
 int index = 0;

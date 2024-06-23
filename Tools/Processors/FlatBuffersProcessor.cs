@@ -24,7 +24,7 @@ public class FlatBuffersProcessor(Config config, Util.Ref<string> version) : IRe
         if (!CheckFlatc()) return;
         var branch = version.Value.StartsWith("GL") ? "YoStar" : "main";
         using var jsonTree = github.FileTree("MooncellWiki", "OpenArknightsFBS", branch);
-        fbsFolder = Path.Combine(config.WorkingDirectory, Folders.FBS, branch);
+        fbsFolder = Path.Combine(config.WorkingDirectory, Paths.FBS, branch);
         Directory.CreateDirectory(fbsFolder);
 
         foreach (var file in jsonTree.RootElement.GetProperty("tree").EnumerateArray())
@@ -80,7 +80,7 @@ public class FlatBuffersProcessor(Config config, Util.Ref<string> version) : IRe
         using (var file = File.Create(tmpPath))
             file.Write(data.AsSpan(128));
 
-        var destDir = Path.Combine(folder, Folders.Processed, Path.ChangeExtension(abPath, null)) + Path.DirectorySeparatorChar;
+        var destDir = Path.Combine(folder, Paths.Processed, Path.ChangeExtension(abPath, null)) + Path.DirectorySeparatorChar;
         Directory.CreateDirectory(destDir);
         var proc = new Process()
         {

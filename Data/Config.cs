@@ -5,6 +5,13 @@ namespace ArknightsWorkshop;
 public class Config
 {
     public int MaxConcurrentDownloads { get; set; } = 4;
+    public int MaxProcessingThreads { get; set; } =
+#if DEBUG
+        1;
+#else
+        Environment.ProcessorCount;
+#endif
+
     public bool KeepIntermediateData { get; set; } = true;
     public string WorkingDirectory { get; set; } = Path.Combine(Util.ExecutableFolder!, "resources");
 

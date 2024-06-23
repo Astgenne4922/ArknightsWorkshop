@@ -1,6 +1,9 @@
 ﻿using KiDev.StreamCopy;
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
 
 namespace ArknightsWorkshop;
 
@@ -92,6 +95,79 @@ public static class Util
     {
         var bytes = MemoryMarshal.AsBytes(new ReadOnlySpan<T>(ref value));
         return Convert.ToHexString(bytes);
+    }
+
+    public static IEnumerable<string> GetFileTree(string folder)
+    {
+        return GetFiles(new DirectoryInfo(folder)).Select(f => f.FullName);
+
+        static IEnumerable<FileInfo> GetFiles(FileSystemInfo fs) => fs switch
+        {
+            FileInfo fi => [fi],
+            DirectoryInfo di => di.EnumerateFileSystemInfos().SelectMany(GetFiles),
+            _ => throw new("Neither file nor folder?!"),
+        };
+    }
+
+    public static string? GetStringPropOr(this JsonElement e, string name, string? or = null) =>
+        e.TryGetProperty(name, out var prop) ? prop.GetString() : or;
+
+    [return: NotNullIfNotNull(nameof(src))]
+    public static string? Unescape(string? src)
+    {
+        if (src is null) return null;
+
+        var srcS = src.AsSpan();
+        var sb = new StringBuilder();
+        while(!srcS.IsEmpty)
+        {
+            var to = srcS.IndexOf('\\');
+            if(to == -1)
+            {
+                sb.Append(srcS);
+                srcS = default;
+                continue;
+            }
+            if(to > 0)
+            {
+                sb.Append(srcS[..to]);
+                srcS = srcS[to..];
+                continue;
+            }
+            if (srcS[1] == '\\')
+            {
+                srcS = srcS[2..];
+                sb.Append('\\');
+                continue;
+            }
+            if (srcS[1] == 'r')
+            {
+                srcS = srcS[2..];
+                sb.Append('\r');
+                continue;
+            }
+            if (srcS[1] == 'n')
+            {
+                srcS = srcS[2..];
+                sb.Append('\n');
+                continue;
+            }
+            if (srcS[1] == 't')
+            {
+                srcS = srcS[2..];
+                sb.Append('\t');
+                continue;
+            }
+            if (srcS[1] == 'u')
+            {
+                var code = srcS[2..6];
+                srcS = srcS[6..];                
+                sb.Append((char)int.Parse(code, System.Globalization.NumberStyles.HexNumber));
+                continue;
+            }
+            throw new($"Unknown escape sequence: {srcS}");
+        }
+        return sb.ToString();
     }
 
     public class Ref<T> where T : class

@@ -37,7 +37,7 @@ public class SoundProcessor : IResourceProcessor
         {
             bank.Samples[i].RebuildAsStandardFileFormat(out var data, out var ext);
             var filename = field["m_Name"].AsString + ((bank!.Samples.Count == 1) ? "" : $"sample_{i}");
-            var path = Path.Combine(folder, Folders.Processed, Path.ChangeExtension(abPath, null), filename);
+            var path = Path.Combine(folder, Paths.Processed, Path.ChangeExtension(abPath, null), filename);
             path = Path.ChangeExtension(path, ext);
             Util.TouchFile(path);
             File.WriteAllBytes(path, data!);

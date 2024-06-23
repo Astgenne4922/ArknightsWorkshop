@@ -11,7 +11,7 @@ public class DownloadResources(Config config) : Tool
 
     public override string Name => "Download and unzip all resources";
 
-    private string folder = Path.Combine(config.WorkingDirectory, Folders.Assets);
+    private string folder = Path.Combine(config.WorkingDirectory, Paths.Assets);
     private bool useGlobalServer, simplerProgress;
     private PackInfoData[] processes = null!;
     private bool finishedDownloading = false;
@@ -51,8 +51,8 @@ public class DownloadResources(Config config) : Tool
         var info = await GameServerInfo.Fetch(useGlobalServer ? GameServerInfo.Global : GameServerInfo.China);
         Console.WriteLine($"Current version: {info.ResourceVersion}");
         folder = Path.Combine(folder, $"{(useGlobalServer ? "GL" : "CN")}_{info.ResourceVersion}");
-        Directory.CreateDirectory(Path.Combine(folder, Folders.RawResources));
-        Directory.CreateDirectory(Path.Combine(folder, Folders.Resources));
+        Directory.CreateDirectory(Path.Combine(folder, Paths.RawResources));
+        Directory.CreateDirectory(Path.Combine(folder, Paths.Resources));
         if (cancel.IsCancellationRequested) return;
 
         // Fetch available packs
@@ -66,7 +66,7 @@ public class DownloadResources(Config config) : Tool
         processes = new PackInfoData[list.PackInfos.Length];
         for (var i = 0; i < processes.Length; i++)
         {
-            var pos = new DownloadProgressStorage(Path.Combine(folder, Folders.DownloadProgress, list.PackInfos[i].Name));
+            var pos = new DownloadProgressStorage(Path.Combine(folder, Paths.DownloadProgress, list.PackInfos[i].Name));
             processes[i] = new(list.PackInfos[i].Name, list.PackInfos[i].TotalSize, pos);
             var ii = i;
             processes[i].Process = Task.Run(() => DownloadDat(processes[ii], info.AssetsUrl), CancellationToken.None);
@@ -82,15 +82,15 @@ public class DownloadResources(Config config) : Tool
         FetchApk();
 
         if (cancel.IsCancellationRequested) return;
-        Util.TouchFile(Path.Combine(folder, Folders.DownloadFinishTag));
-        Directory.Delete(Path.Combine(folder, Folders.DownloadProgress), true);
+        Util.TouchFile(Path.Combine(folder, Paths.DownloadFinishTag));
+        Directory.Delete(Path.Combine(folder, Paths.DownloadProgress), true);
         if (!config.KeepIntermediateData)
-            Directory.Delete(Path.Combine(folder, Folders.RawResources));
+            Directory.Delete(Path.Combine(folder, Paths.RawResources));
     }
 
     private void FetchApk()
     {
-        var apkPath = Path.Combine(folder, Folders.RawResources, ApkFileName);
+        var apkPath = Path.Combine(folder, Paths.RawResources, ApkFileName);
         DownloadProgressStorage process = null!;
         if (useGlobalServer)
         {
@@ -103,7 +103,7 @@ public class DownloadResources(Config config) : Tool
         {
             Util.TouchFile(apkPath);
             using var http = Util.MakeAkClient();
-            process = new(Path.Combine(folder, Folders.DownloadProgress, ApkFileName));
+            process = new(Path.Combine(folder, Paths.DownloadProgress, ApkFileName));
             if(!process.Done)
             {
                 Task.Run(() =>
@@ -125,7 +125,7 @@ public class DownloadResources(Config config) : Tool
         Console.Write("[apk file] Unpacking... ");
         if(!process.Unpacked)
         {
-            Util.UnpackZip(apkPath, Path.Combine(folder, Folders.Resources), ApkAssetsPrefix, cancel);
+            Util.UnpackZip(apkPath, Path.Combine(folder, Paths.Resources), ApkAssetsPrefix, cancel);
             if (cancel.IsCancellationRequested) return;
             process.Unpacked = true;
         }
@@ -188,7 +188,7 @@ public class DownloadResources(Config config) : Tool
 
     private void DownloadDat(PackInfoData data, string assetsUrl)
     {
-        var datPath = Path.Combine(folder, Folders.RawResources, $"{data.Name}.dat");
+        var datPath = Path.Combine(folder, Paths.RawResources, $"{data.Name}.dat");
         // Download pack from servers
         if(!data.Downloading.Done)
         {
@@ -206,7 +206,7 @@ public class DownloadResources(Config config) : Tool
         // Decompress these packs. They're compressed as .zip
         if (!data.Downloading.Unpacked)
         {
-            Util.UnpackZip(datPath, Path.Combine(folder, Folders.Resources), "", cancel);
+            Util.UnpackZip(datPath, Path.Combine(folder, Paths.Resources), "", cancel);
             if (cancel.IsCancellationRequested) return;
             if (!config.KeepIntermediateData) File.Delete(datPath);
             data.Downloading.Unpacked = true;
