@@ -29,9 +29,7 @@ public class DownloadResources(Config config) : Tool
                 useGlobalServer = false;
             else
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"Invalid server: {serv}");
-                Console.ResetColor();
+                ConsoleUI.WriteLineColor(ConsoleColor.Red, $"Invalid server: {serv}");
                 return false;
             }
         }
@@ -94,9 +92,7 @@ public class DownloadResources(Config config) : Tool
         DownloadProgressStorage process = null!;
         if (useGlobalServer)
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("Downloading global server's APK is not implemented yet.");
-            Console.ResetColor();
+            ConsoleUI.WriteLineColor(ConsoleColor.Red, "Downloading global server's APK is not implemented yet.");
             return;
         }
         else

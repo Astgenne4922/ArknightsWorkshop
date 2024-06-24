@@ -25,6 +25,21 @@ public static class Util
 
     public static T NotNullJson<T>(this T? obj) => obj ?? throw new("null in JSON?!");
 
+    public static List<T> JsonToList<T>(this JsonElement json, Func<JsonElement, T?> selector)
+    {
+        var ret = new List<T>();
+        foreach (var e in json.EnumerateArray())
+        {
+            var p = selector(e);
+            if (p is null) continue;
+            ret.Add(p);
+        }
+        return ret;
+    }
+
+    public static List<T> JsonToListOrEmpty<T>(this JsonElement json, string name, Func<JsonElement, T?> selector) =>
+        json.TryGetProperty(name, out var prop) ? prop.JsonToList(selector) : [];
+
     public static HttpClient MakeAkClient()
     {
         var http = new HttpClient();
@@ -109,8 +124,19 @@ public static class Util
         };
     }
 
-    public static string? GetStringPropOr(this JsonElement e, string name, string? or = null) =>
-        e.TryGetProperty(name, out var prop) ? prop.GetString() : or;
+    public static T GetPropOr<T>(this JsonElement e, string name, T or) 
+    {
+        if(typeof(T) == typeof(string))
+            return e.TryGetProperty(name, out var prop) ? Cast(prop.GetString().NotNullJson()) : or;
+        if (typeof(T) == typeof(int))
+            return e.TryGetProperty(name, out var prop) ? Cast(prop.GetInt32()) : or;
+        if (typeof(T) == typeof(float))
+            return e.TryGetProperty(name, out var prop) ? Cast(prop.GetSingle()) : or;
+        throw new($"Unsupported type: {typeof(T)}");
+
+        static T Cast<TFrom>(TFrom from) => 
+            System.Runtime.CompilerServices.Unsafe.As<TFrom, T>(ref from);
+    }
 
     [return: NotNullIfNotNull(nameof(src))]
     public static string? Unescape(string? src)

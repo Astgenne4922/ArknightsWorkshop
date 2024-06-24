@@ -28,9 +28,7 @@ public class SoundProcessor : IResourceProcessor
         Util.ReadExactlyOldStream(resource, buff);
         if(!FsbLoader.TryLoadFsbFromByteArray(buff, out var bank))
         {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"Warning: couldn't load '{field["m_Name"].AsString}' in '{abPath}' as an FSB bank");
-            Console.ResetColor();
+            ConsoleUI.WriteLineColor(ConsoleColor.Yellow, $"Warning: couldn't load '{field["m_Name"].AsString}' in '{abPath}' as an FSB bank");
             return;
         }
         for (int i = 0; i < bank!.Samples.Count; i++)

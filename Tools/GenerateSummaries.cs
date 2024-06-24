@@ -63,24 +63,20 @@ public class GenerateSummaries(Config config) : Tool
             var item = pair.GetProperty("value");
             var id = item.GetProperty("itemId").GetString()!;
             var name = Util.Unescape(item.GetProperty("name").GetString()!);
-            var description = Util.Unescape(item.GetStringPropOr("description"));
-            var usage = Util.Unescape(item.GetStringPropOr("obtainApproach"));
-            var obtain = Util.Unescape(item.GetStringPropOr("obtainApproach"));
+            var description = Util.Unescape(item.GetPropOr<string?>("description", null));
+            var usage = Util.Unescape(item.GetPropOr<string?>("obtainApproach", null));
+            var obtain = Util.Unescape(item.GetPropOr<string?>("obtainApproach", null));
             int? tier = item.TryGetProperty("rarity", out var p2) ? int.Parse(p2.GetString().AsSpan(5)) : default;
             var iconPaths = files.TryGetValue($"{item.GetProperty("iconId").GetString()!}.png", out var l) ? l : FrozenSet<string>.Empty;
 
-            var stages = new List<(string, string?)>();
-            foreach (var stage in item.GetProperty("stageDropList").EnumerateArray())
-                stages.Add((
-                    stage.GetProperty("stageId").GetString()!,
-                    stage.GetStringPropOr("occPer")
+            var stages = item.GetProperty("stageDropList").JsonToList(s => (
+                    s.GetProperty("stageId").GetString()!,
+                    s.GetPropOr<string?>("occPer", null)
                 ));
 
-            var crafts = new List<(string, long)>();
-            foreach (var craft in item.GetProperty("buildingProductList").EnumerateArray())
-                crafts.Add((
-                    craft.GetProperty("roomType").GetString()!,
-                    long.Parse(craft.GetProperty("formulaId").GetString()!)
+            var crafts = item.GetProperty("buildingProductList").JsonToList(p => (
+                    p.GetProperty("roomType").GetString().NotNullJson(),
+                    long.Parse(p.GetProperty("formulaId").GetString().NotNullJson())
                 ));
 
             items[id] = new(name, description, usage, obtain, tier, iconPaths, stages, crafts);
@@ -100,22 +96,20 @@ public class GenerateSummaries(Config config) : Tool
             var stage = pair.GetProperty("value");
 
             var code = stage.GetProperty("code").GetString()!;
-            var name = Util.Unescape(stage.GetStringPropOr("name", ""));
-            var desc = Util.Unescape(stage.GetStringPropOr("description", ""));
-            var zone = stage.GetProperty("zoneId").GetString()!;
-            var unitLv = stage.GetStringPropOr("dangerLevel", "-");
+            var name = Util.Unescape(stage.GetPropOr("name", ""));
+            var desc = Util.Unescape(stage.GetPropOr("description", ""));
+            var zone = stage.GetProperty("zoneId").GetString().NotNullJson();
+            var unitLv = stage.GetPropOr("dangerLevel", "-");
             var isCM = stage.GetProperty("difficulty").GetString() == "FOUR_STAR";
-            var env = stage.GetStringPropOr("diffGroup");
-            var san = stage.TryGetProperty("apCost", out var sanProp) ? sanProp.GetInt32() : 0;
+            var env = stage.GetPropOr<string?>("diffGroup", null);
+            var san = stage.GetPropOr("apCost", 0);
 
-            var drops = new List<StageDropDesc>();
-            if (stage.TryGetProperty("stageDropInfo", out var dropProp))
-                foreach (var drop in dropProp.GetProperty("displayDetailRewards").EnumerateArray())
-                    drops.Add(new(
-                        drop.GetProperty("id").GetString()!,
-                        drop.GetStringPropOr("occPercent"),
-                        drop.GetStringPropOr("dropType")
-                    ));
+            var drops = !stage.TryGetProperty("stageDropInfo", out var dropProp) ? [] : 
+                stage.GetProperty("displayDetailRewards").JsonToList<StageDropDesc>(p => new(
+                    p.GetProperty("id").GetString()!,
+                    p.GetPropOr<string?>("occPercent", null),
+                    p.GetPropOr<string?>("dropType", null)
+                ));
 
             stages[key] = new(code, name, desc, zone, unitLv!, isCM, env, san, drops);
         }
@@ -130,133 +124,93 @@ public class GenerateSummaries(Config config) : Tool
 
         foreach (var pair in json.RootElement.GetProperty("characters").EnumerateArray())
         {
-            var key = pair.GetProperty("key").GetString()!;
+            var key = pair.GetProperty("key").GetString().NotNullJson();
             var value = pair.GetProperty("value");
 
-            var name = value.GetProperty("name").GetString()!;
-            var desc = value.GetStringPropOr("description");
-            var tokId = value.GetStringPropOr("potentialItemId");
-            var kernTokId = value.GetStringPropOr("classicPotentialItemId");
-            var pos = value.GetStringPropOr("position", "MELEE")!;
-            var tags = new List<string>();
-            if (value.TryGetProperty("tagList", out var taglPr))
-                foreach (var tag in taglPr.EnumerateArray())
-                    tags.Add(tag.GetString()!);
-            var itUsag = value.GetStringPropOr("itemUsage");
-            var itDesc = value.GetStringPropOr("itemDesc");
+            var name = value.GetProperty("name").GetString().NotNullJson();
+            var desc = value.GetPropOr<string?>("description", null);
+            var tokId = value.GetPropOr<string?>("potentialItemId", null);
+            var kernTokId = value.GetPropOr<string?>("classicPotentialItemId", null);
+            var pos = value.GetPropOr("position", "MELEE");
+            var tags = value.JsonToListOrEmpty("tagList", t => t.GetString().NotNullJson());
+            var itUsag = value.GetPropOr<string?>("itemUsage", null);
+            var itDesc = value.GetPropOr<string?>("itemDesc", null);
             var rarity = value.TryGetProperty("rarity", out var rarPr) ? rarPr.GetString()![5] - '0' : 1;
-            var uclass = value.GetProperty("profession").GetString()!;
-            var uarchc = value.GetProperty("subProfessionId").GetString()!;
+            var uclass = value.GetProperty("profession").GetString().NotNullJson();
+            var uarchc = value.GetProperty("subProfessionId").GetString().NotNullJson();
 
-            var elites = new List<CharEliteDesc>();
-            foreach (var elite in value.GetProperty("phases").EnumerateArray())
+            var elites = value.GetProperty("attributesKeyFrames").JsonToList(elite =>
             {
-                var range = elite.GetStringPropOr("rangeId", "0-1")!;
-                var attrs = new List<CharStats>();
-                foreach (var attr in elite.GetProperty("attributesKeyFrames").EnumerateArray())
+                var range = elite.GetPropOr("rangeId", "0-1")!;
+                var attrs = elite.GetProperty("attributesKeyFrames").JsonToList(attr =>
                 {
                     var data = attr.GetProperty("data");
                     var lv = attr.GetProperty("level").GetInt32();
                     var hp = data.GetProperty("maxHp").GetInt32();
-                    var atk = data.TryGetProperty("atk", out var atkProp) ? atkProp.GetInt32() : 0;
-                    var def = data.TryGetProperty("def", out var defPr) ? defPr.GetInt32() : 0;
-                    var res = data.TryGetProperty("magicResistance", out var resPr) ? resPr.GetSingle() : 0f;
-                    var dp = data.TryGetProperty("cost", out var cPr) ? cPr.GetInt32() : 0;
-                    var block = data.TryGetProperty("blockCnt", out var blkPr) ? blkPr.GetInt32() : 0;
-                    var atkint = data.GetProperty("baseAttackTime").GetSingle();
-                    var redept = data.TryGetProperty("respawnTime", out var rspPr) ? rspPr.GetInt32() : 0;
-                    attrs.Add(new(lv, hp, atk, def, res, dp, block, atkint, redept));
-                }
-                var cost = new List<(string, int)>();
-                if (elite.TryGetProperty("evolveCost", out var costProp))
-                    foreach (var item in costProp.EnumerateArray())
-                        cost.Add((
-                            item.GetProperty("id").GetString()!,
-                            item.GetProperty("count").GetInt32()
-                        ));
-                elites.Add(new(range, attrs, cost));
-            }
+                    var atk = data.GetPropOr("atk", 0);
+                    var def = data.GetPropOr("def", 0);
+                    var res = data.GetPropOr("magicResistance", 0f);
+                    var dp = data.GetPropOr("cost", 0);
+                    var block = data.GetPropOr("blockCnt", 0);
+                    var atkint = data.GetPropOr("baseAttackTime", 0f);
+                    var redept = data.GetPropOr("respawnTime", 0);
+                    return new CharStats(lv, hp, atk, def, res, dp, block, atkint, redept);
+                });
+                var cost = elite.JsonToListOrEmpty("evolveCost", ItemFromJson);
+                return new CharEliteDesc(range, attrs, cost);
+            });
 
-            var skills = new List<CharSkillDesc>();
-            foreach (var skill in value.GetProperty("skills").EnumerateArray())
+            var skills = value.GetProperty("skills").JsonToList(skill =>
             {
-                if (!skill.TryGetProperty("skillId", out var idProp)) continue;
+                if (!skill.TryGetProperty("skillId", out var idProp)) return null;
                 var id = idProp.ToString();
 
-                var mast = new List<List<(string, int)>>();
-                foreach (var mProp in skill.GetProperty("levelUpCostCond").EnumerateArray())
-                {
-                    var cost = new List<(string, int)>();
-                    if (mProp.TryGetProperty("levelUpCost", out var lvUpCost))
-                        foreach (var itemC in lvUpCost.EnumerateArray())
-                            cost.Add((
-                                itemC.GetProperty("id").GetString()!,
-                                itemC.GetProperty("count").GetInt32()
-                            ));
-                    mast.Add(cost);
-                }
+                var mast = skill.GetProperty("levelUpCostCond").JsonToList(mProp =>
+                    mProp.JsonToListOrEmpty("levelUpCost", ItemFromJson)
+                );
 
-                skills.Add(new(id, mast));
-            }
+                return new CharSkillDesc(id, mast);
+            });
 
             var talents = new List<CharTalentDesc>();
             if (value.TryGetProperty("talents", out var talProp))
                 foreach (var talent in talProp.EnumerateArray())
-                    if (talent.TryGetProperty("candidates", out var talcProp))
-                        foreach (var talentc in talcProp.EnumerateArray())
-                        {
-                            var prKey = talentc.GetProperty("prefabKey").GetString()!;
-                            var ind = prKey[0] - '0';
-                            var byModule = prKey.Length > 1;
-                            var unCond = talentc.GetProperty("unlockCondition");
-                            var needLv = unCond.GetProperty("level").GetInt32();
-                            var needEl = unCond.TryGetProperty("phase", out var phProp) ? phProp.GetString()![6] - '0' : 0;
-                            var needPt = talentc.TryGetProperty("requiredPotentialRank", out var tlProp) ? tlProp.GetInt32() : 0;
-                            var tname = talentc.GetStringPropOr("name", "")!;
-                            var tdesc = talentc.GetStringPropOr("description", "")!;
-
-                            talents.Add(new(ind, needEl, needLv, needPt, byModule, tname, tdesc));
-                        }
-
-            var potentials = new List<string>();
-            foreach (var pot in value.GetProperty("potentialRanks").EnumerateArray())
-                potentials.Add(pot.GetProperty("description").GetString()!);
-
-            var trusts = new List<TrustBonusDesc>();
-            if (value.TryGetProperty("favorKeyFrames", out var trustProp))
-                foreach (var tr in trustProp.EnumerateArray())
-                {
-                    var lv = tr.TryGetProperty("level", out var lvProp) ? lvProp.GetInt32() : 0;
-                    var atk = 0;
-                    var def = 0;
-                    var hp = 0;
-                    foreach (var p in tr.GetProperty("data").EnumerateObject())
+                    talents.AddRange(talent.JsonToListOrEmpty("candidates", talentc =>
                     {
-                        if (p.NameEquals("atk")) atk = p.Value.GetInt32();
-                        else if (p.NameEquals("maxHp")) hp = p.Value.GetInt32();
-                        else if (p.NameEquals("def")) def = p.Value.GetInt32();
-                        else
-                        {
-                            Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine($"'{name}': unknown trust bonus attribute '{p.Name}'");
-                            Console.ResetColor();
-                        }
-                    }
-                    trusts.Add(new(lv, atk, def, hp));
-                }
+                        var prKey = talentc.GetProperty("prefabKey").GetString()!;
+                        var ind = prKey[0] - '0';
+                        var byModule = prKey.Length > 1;
+                        var unCond = talentc.GetProperty("unlockCondition");
+                        var needLv = unCond.GetProperty("level").GetInt32();
+                        var needEl = unCond.TryGetProperty("phase", out var phProp) ? phProp.GetString().NotNullJson()[6] - '0' : 0;
+                        var needPt = talentc.GetPropOr("requiredPotentialRank", 0);
+                        var tname = talentc.GetPropOr("name", "");
+                        var tdesc = talentc.GetPropOr("description", "");
 
-            var skillsUp = new List<List<(string, int)>>();
-            foreach (var mProp in value.GetProperty("allSkillLvlup").EnumerateArray())
+                        return new CharTalentDesc(ind, needEl, needLv, needPt, byModule, tname, tdesc);
+                    }));
+
+            var potentials = value.GetProperty("potentialRanks").JsonToList(p => 
+                p.GetProperty("description").GetString().NotNullJson());
+
+            var trusts = value.JsonToListOrEmpty("favorKeyFrames", tr =>
             {
-                var skillUp = new List<(string, int)>();
-                if (mProp.TryGetProperty("lvlUpCost", out var cUpCost))
-                    foreach (var itemC in cUpCost.EnumerateArray())
-                        skillUp.Add((
-                            itemC.GetProperty("id").GetString()!,
-                            itemC.GetProperty("count").GetInt32()
-                        ));
-                skillsUp.Add(skillUp);
-            }
+                var lv = tr.TryGetProperty("level", out var lvProp) ? lvProp.GetInt32() : 0;
+                var atk = 0;
+                var def = 0;
+                var hp = 0;
+                foreach (var p in tr.GetProperty("data").EnumerateObject())
+                {
+                    if (p.NameEquals("atk")) atk = p.Value.GetInt32();
+                    else if (p.NameEquals("maxHp")) hp = p.Value.GetInt32();
+                    else if (p.NameEquals("def")) def = p.Value.GetInt32();
+                    else ConsoleUI.WriteLineColor(ConsoleColor.Yellow, $"'{name}': unknown trust bonus attribute '{p.Name}'");
+                }
+                return new TrustBonusDesc(lv, atk, def, hp);
+            });
+
+            var skillsUp = value.GetProperty("allSkillLvlup").JsonToList(mProp => 
+                mProp.JsonToListOrEmpty("lvlUpCost", ItemFromJson));
 
             chars[key] = new(name, desc, tokId, kernTokId, pos, tags, itUsag, itDesc, rarity,
                 uclass, uarchc, elites, skills, talents, potentials, trusts, skillsUp);
@@ -275,13 +229,13 @@ public class GenerateSummaries(Config config) : Tool
         {
             var key = pair.GetProperty("key").GetString()!;
             var skill = pair.GetProperty("value");
-            var icon = skill.GetStringPropOr("iconId");
+            var icon = skill.GetPropOr<string?>("iconId", null);
 
             // I don't think any skill will change it's name or charging/activation type when leveled up
             var sumData = skill.GetProperty("levels")[0];
-            var name = Util.Unescape(sumData.GetProperty("name").GetString());
-            var range = sumData.GetStringPropOr("rangeId");
-            var actT = sumData.GetStringPropOr("skillType", "AUTO")!;
+            var name = Util.Unescape(sumData.GetProperty("name").GetString()).NotNullJson();
+            var range = sumData.GetPropOr<string?>("rangeId", null);
+            var actT = sumData.GetPropOr("skillType", "AUTO");
             var chgProp = sumData.GetProperty("spData").GetProperty("spType");
             var chgT = chgProp.ValueKind switch
             {
@@ -294,27 +248,27 @@ public class GenerateSummaries(Config config) : Tool
                 _ => throw new("Unknown activation type JsonType")
             };
 
-            var levels = new List<SkillLevelDesc>();
-            foreach (var level in skill.GetProperty("levels").EnumerateArray())
+            var levels = skill.GetProperty("levels").JsonToList(level =>
             {
-                var desc = level.GetStringPropOr("description", "")!;
+                var desc = level.GetPropOr("description", "");
                 var spData = level.GetProperty("spData");
-                var sp = spData.TryGetProperty("spCost", out var spPr) ? spPr.GetInt32() : 0;
-                var init = spData.TryGetProperty("initSp", out var initPr) ? initPr.GetInt32() : 0;
-                var dur = level.TryGetProperty("duration", out var durP) ? durP.GetSingle() : SkillLevelDesc.InfiniteDuration;
+                var sp = spData.GetPropOr("spCost", 0);
+                var init = spData.GetPropOr("initSp", 0);
+                var dur = level.GetPropOr("duration", SkillLevelDesc.InfiniteDuration);
                 var dict = new Dictionary<string, string>();
                 foreach (var bEntry in level.GetProperty("blackboard").EnumerateArray())
                 {
                     if (!bEntry.TryGetProperty("value", out var val)) continue;
                     dict[bEntry.GetProperty("key").GetString()!.ToLower()] = val.ValueKind switch
                     {
-                        JsonValueKind.String => val.GetString()!,
+                        JsonValueKind.String => val.GetString().NotNullJson(),
                         JsonValueKind.Number => val.GetDouble().ToString(),
                         _ => throw new("Unexpected JsonType in skill blackboard")
                     };
                 }
-                levels.Add(new(desc, sp, init, dur, dict));
-            }
+                return new SkillLevelDesc(desc, sp, init, dur, dict);
+            });
+
             skills[key] = new(name, icon, actT, chgT, range, levels);
         }
         return true;
@@ -334,17 +288,14 @@ public class GenerateSummaries(Config config) : Tool
 
             var charId = skin.GetProperty("charId").GetString()!;
             var avatId = skin.GetProperty("avatarId").GetString()!;
-            var portId = skin.GetStringPropOr("portraitId");
-            var name = Util.Unescape(disp.GetStringPropOr("skinName"));
-            var auths = new List<string>();
-            if (disp.TryGetProperty("drawerList", out var dispProp))
-                foreach (var auth in dispProp.EnumerateArray())
-                    auths.Add(Util.Unescape(auth.GetString()!));
-            var grop = Util.Unescape(disp.GetStringPropOr("skinGroupName"));
-            var cont = Util.Unescape(disp.GetStringPropOr("content"));
-            var diag = Util.Unescape(disp.GetStringPropOr("dialog"));
-            var usag = Util.Unescape(disp.GetStringPropOr("usage"));
-            var desc = Util.Unescape(disp.GetStringPropOr("description"));
+            var portId = skin.GetPropOr<string?>("portraitId", null);
+            var name = Util.Unescape(disp.GetPropOr<string?>("skinName", null));
+            var auths = disp.JsonToListOrEmpty("drawerList", auth => Util.Unescape(auth.GetString()).NotNullJson());
+            var grop = Util.Unescape(disp.GetPropOr<string?>("skinGroupName", null));
+            var cont = Util.Unescape(disp.GetPropOr<string?>("content", null));
+            var diag = Util.Unescape(disp.GetPropOr<string?>("dialog", null));
+            var usag = Util.Unescape(disp.GetPropOr<string?>("usage", null));
+            var desc = Util.Unescape(disp.GetPropOr<string?>("description", null));
 
             if (!skins.TryGetValue(charId, out var charSkins))
                 charSkins = skins[charId] = [];
@@ -360,38 +311,27 @@ public class GenerateSummaries(Config config) : Tool
         if (json is null) return false;
 
         foreach (var pair in json.RootElement.GetProperty("charEquip").EnumerateArray())
-        {
-            var key = pair.GetProperty("key").GetString()!;
-            var mods = new List<string>();
-            foreach (var charMod in pair.GetProperty("value").EnumerateArray())
-                mods.Add(charMod.GetString()!);
-            charModules[key] = mods;
-        }
+            charModules[pair.GetProperty("key").GetString().NotNullJson()] =
+                pair.GetProperty("value").JsonToList(charMod => charMod.GetString().NotNullJson());
+
         foreach (var pair in json.RootElement.GetProperty("subProfDict").EnumerateArray())
-        {
-            var key = pair.GetProperty("key").GetString()!;
-            var val = pair.GetProperty("value").GetProperty("subProfessionName").GetString()!;
-            subClassMap[key] = val;
-        }
+            subClassMap[pair.GetProperty("key").GetString().NotNullJson()] = 
+                pair.GetProperty("value").GetProperty("subProfessionName").GetString().NotNullJson();
+
         foreach (var pair in json.RootElement.GetProperty("missionList").EnumerateArray())
-        {
-            var key = pair.GetProperty("key").GetString()!;
-            var val = Util.Unescape(pair.GetProperty("value").GetProperty("desc").GetString())!;
-            modMissions[key] = val;
-        }
+            modMissions[pair.GetProperty("key").GetString().NotNullJson()] = 
+                Util.Unescape(pair.GetProperty("value").GetProperty("desc").GetString()).NotNullJson();
+
         foreach (var pair in json.RootElement.GetProperty("equipDict").EnumerateArray())
         {
-            var key = pair.GetProperty("key").GetString()!;
+            var key = pair.GetProperty("key").GetString().NotNullJson();
             var mod = pair.GetProperty("value");
 
-            var name = Util.Unescape(mod.GetProperty("uniEquipName").GetString())!;
+            var name = Util.Unescape(mod.GetProperty("uniEquipName").GetString()).NotNullJson();
             var icon = mod.GetProperty("uniEquipIcon").GetString()!;
-            var desc = Util.Unescape(mod.GetProperty("uniEquipDesc").GetString())!;
-            var type = mod.GetProperty("typeIcon").GetString()!.ToUpper();
-
-            var missions = new List<string>();
-            foreach(var missPr in mod.GetProperty("missionList").EnumerateArray())
-                missions.Add(missPr.GetString()!);
+            var desc = Util.Unescape(mod.GetProperty("uniEquipDesc").GetString()).NotNullJson();
+            var type = mod.GetProperty("typeIcon").GetString().NotNullJson().ToUpper();
+            var missions = mod.GetProperty("missionList").JsonToList(p => p.GetString().NotNullJson());
 
             var costs = new List<List<(string, int)>>();
             if(mod.TryGetProperty("itemCost", out var costsProp))
@@ -399,14 +339,8 @@ public class GenerateSummaries(Config config) : Tool
                 {
                     var level = missPr.GetProperty("key").GetInt32() - 1;
                     while (costs.Count <= level) costs.Add(null!);
-                    var cost = new List<(string, int)>();
 
-                    foreach (var item in missPr.GetProperty("value").EnumerateArray())
-                        cost.Add((
-                            item.GetProperty("id").GetString()!,
-                            item.GetProperty("count").GetInt32()
-                        ));
-                    costs[level] = cost;
+                    costs[level] = missPr.GetProperty("value").JsonToList(ItemFromJson);
                 }
 
             modules[key] = new(name, icon, desc, type, missions, costs);
@@ -544,7 +478,7 @@ public class GenerateSummaries(Config config) : Tool
                 foreach (var stats in charc.Elites[i].Stats)
                     write.WriteLine($"{$"E{i}L{stats.Level}",-8}{stats.MaxHP,-8}{stats.ATK,-8}{stats.DEF,-8}{stats.RES,-8}{stats.DP,-8}{stats.Block,-8}{stats.AttackTime,-10}{stats.RespawnTime,-8}");
             for (int i = 1; i < charc.Elites.Count; i++)
-                write.WriteLine($"E{i} cost: {string.Join(", ", charc.Elites[i].Materials.Select(p => $"{p.Item2}× {items[p.Item1].Name}"))}");
+                write.WriteLine($"E{i} cost: {FormatItemBundle(charc.Elites[i].Materials)}");
             // TODO: range
 
             if (charc.Skills.Count > 0)
@@ -552,7 +486,7 @@ public class GenerateSummaries(Config config) : Tool
                 write.WriteLine();
                 write.WriteLine("Common skill upgrade cost:");
                 for (int i = 0; i < charc.SkillLevelCosts.Count; i++)
-                    write.WriteLine($"  L{i + 2}: {string.Join(", ", charc.SkillLevelCosts[i].Select(p => $"{p.Item2}× {items[p.Item1].Name}"))}");
+                    write.WriteLine($"  L{i + 2}: {FormatItemBundle(charc.SkillLevelCosts[i])}");
                 for (int i = 0; i < charc.Skills.Count; i++)
                 {
                     // TODO: skill range
@@ -583,7 +517,7 @@ public class GenerateSummaries(Config config) : Tool
                         swrite.WriteLine(lvl.FormatDescription());
                         swrite.WriteLine($"      Advanced: [{string.Join("; ", lvl.Blackboard.Select(p => $"{p.Key}: {p.Value}"))}]");
                         if (j >= 7)
-                            swrite.WriteLine($"      Cost: {string.Join(", ", charc.Skills[i].MasteryCost[j - 7].Select(p => $"{p.Item2}× {items[p.Item1].Name}"))}");
+                            swrite.WriteLine($"      Cost: {FormatItemBundle(charc.Skills[i].MasteryCost[j - 7])}");
                     }
                 }
             }
@@ -618,11 +552,7 @@ public class GenerateSummaries(Config config) : Tool
                         (avatPaths = avatFiles.Where(p => p.Contains("avatar")).ToArray()).Length == 1)
                         File.Copy(avatPaths[0], Path.Combine(folder, $"AVATAR__{skinKey}.png"));
                     else if (isOper)
-                    {
-                        Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.WriteLine($"Couldn't find skin avatar: '{skinKey}' of character '{key}'");
-                        Console.ResetColor();
-                    }
+                        ConsoleUI.WriteLineColor(ConsoleColor.Yellow, $"Couldn't find skin avatar: '{skinKey}' of character '{key}'");
                     if (skin.PortraitId is not null)
                     {
                         string[] skinPaths;
@@ -632,11 +562,7 @@ public class GenerateSummaries(Config config) : Tool
                             File.Copy(skinPaths[0], Path.Combine(folder, $"PORTRAIT__{skinKey}.png"));
                         }
                         else if (isOper)
-                        {
-                            Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine($"Couldn't find skin portrait: '{skinKey}' of character '{key}'");
-                            Console.ResetColor();
-                        }
+                            ConsoleUI.WriteLineColor(ConsoleColor.Yellow, $"Couldn't find skin portrait: '{skinKey}' of character '{key}'");
                     }
 
                     write.WriteLine();
@@ -674,11 +600,7 @@ public class GenerateSummaries(Config config) : Tool
                         if (files.TryGetValue($"{mod.Icon}.png", out var paths))
                             File.Copy(paths.Single(f => f.Contains("equip")), Path.Combine(folder, $"ICON_{mod.Type}.png"));
                         else if (isOper)
-                        {
-                            Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine($"Couldn't find module icon: '{modKey}' of character '{key}'");
-                            Console.ResetColor();
-                        }
+                            ConsoleUI.WriteLineColor(ConsoleColor.Yellow, $"Couldn't find module icon: '{modKey}' of character '{key}'");
                     }
 
                     using var mwrite = new StreamWriter(Path.Combine(folder, $"{mod.Type}.txt"));
@@ -697,7 +619,7 @@ public class GenerateSummaries(Config config) : Tool
                         mwrite.WriteLine();
                         mwrite.WriteLine("  Cost:");
                         for (int i = 0; i < mod.Cost.Count; i++)
-                            mwrite.WriteLine($"    L{i + 1}) {string.Join(", ", mod.Cost[i].Select(p => $"{p.Item2}× {items[p.Item1].Name}"))}");
+                            mwrite.WriteLine($"    L{i + 1}) {FormatItemBundle(mod.Cost[i])}");
                     }
                 }
             // TODO: voices, files and records
@@ -733,12 +655,15 @@ public class GenerateSummaries(Config config) : Tool
         return json;
     }
 
-    static void CantLocate(string what)
-    {
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine($"Couldn't locate {what}.");
-        Console.ResetColor();
-    }
+    private static (string ID, int Count) ItemFromJson(JsonElement json) => (
+        json.GetProperty("id").GetString().NotNullJson(),
+        json.GetProperty("count").GetInt32()
+    );
+
+    private string FormatItemBundle(IEnumerable<(string, int)> data) =>
+        string.Join(", ", data.Select(p => $"{p.Item2}× {items[p.Item1].Name}"));
+
+    static void CantLocate(string what) => ConsoleUI.WriteLineColor(ConsoleColor.Red, $"Couldn't locate {what}.");
 }
 
 // Modules below
@@ -795,9 +720,7 @@ record SkillLevelDesc(string Description, int SP, int InitSP, float Duration, Di
                 sb.Append($"{MathF.Round(float.Parse(fmtVal) * sign * 100, 2)}%");
             else
             {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"Unknown format string - {fmtFmt}");
-                Console.ResetColor();
+                ConsoleUI.WriteLineColor(ConsoleColor.Yellow, $"Unknown format string - {fmtFmt}");
                 sb.Append($"???{fmtVal}:{fmtFmt}???");
             }
         }

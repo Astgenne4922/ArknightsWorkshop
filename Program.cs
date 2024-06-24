@@ -18,9 +18,7 @@ if(CLIArgs.ActionIndex is not null)
 {
     if(!int.TryParse(CLIArgs.ActionIndex, out index) || index <= 0 || index > tools.Length)
     {
-        Console.ForegroundColor = ConsoleColor.DarkRed;
-        Console.WriteLine($"Invalid action index: {CLIArgs.ActionIndex}");
-        Console.ResetColor();
+        ConsoleUI.WriteLineColor(ConsoleColor.DarkRed, $"Invalid action index: {CLIArgs.ActionIndex}");
         return;
     }
     --index;

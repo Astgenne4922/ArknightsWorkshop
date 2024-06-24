@@ -56,7 +56,7 @@ public class FlatBuffersProcessor(Config config, Util.Ref<string> version) : IRe
         var field = manager.GetBaseField(assetFile, asset);
         var name = field["m_Name"].AsString;
 
-        // some eurisic to find appropriate 'fbs' file
+        // some heuristic to find appropriate 'fbs' file
         var onlyOne = false;
         var fbsPath = "";
         foreach(var pair in fbsFiles)
@@ -93,11 +93,7 @@ public class FlatBuffersProcessor(Config config, Util.Ref<string> version) : IRe
         proc.Start();
         proc.WaitForExit();
         if (proc.ExitCode != 0)
-        {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"Warning: couldn't decode '{name}' in '{abPath}' as an FlatBuffer");
-            Console.ResetColor();
-        }
+            ConsoleUI.WriteLineColor(ConsoleColor.Yellow, $"Warning: couldn't decode '{name}' in '{abPath}' as an FlatBuffer");
         Directory.Delete(Path.GetDirectoryName(tmpPath)!, true);
     }
 
@@ -130,12 +126,10 @@ public class FlatBuffersProcessor(Config config, Util.Ref<string> version) : IRe
             link = links.Single(i => i.Name.Contains("Linux") && i.Name.Contains("g++")).Url;
         else
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("""
+            ConsoleUI.WriteLineColor(ConsoleColor.Red, """
                 There is no official 'flatc' build for your machine. Download it into resource 
                 directory of this app. Name (without extension) should be exactly 'flatc'.
                 """);
-            Console.ResetColor();
             return false;
         }
 

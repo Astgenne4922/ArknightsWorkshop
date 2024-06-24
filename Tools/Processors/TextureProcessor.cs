@@ -35,9 +35,7 @@ public class TextureProcessor : IResourceProcessor
 
         if (field["m_RD"]["downscaleMultiplier"].AsFloat != 1f)
         {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"Rescaling is not implemented yet: '{field["m_Name"].AsString}' in '{abPath}'");
-            Console.ResetColor();
+            ConsoleUI.WriteLineColor(ConsoleColor.Yellow, $"Rescaling is not implemented yet: '{field["m_Name"].AsString}' in '{abPath}'");
             return;
         }
 
@@ -172,9 +170,7 @@ public class TextureProcessor : IResourceProcessor
                     pdata = PixelUtils.Rgb565ToBgra32(texture.pictureData);
                 else
                 {
-                    Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine($"'{field["m_Name"].AsString}' in '{abPath}' not decoded, format not implemented: {fmt}");
-                    Console.ResetColor();
+                    ConsoleUI.WriteLineColor(ConsoleColor.Yellow, $"'{field["m_Name"].AsString}' in '{abPath}' not decoded, format not implemented: {fmt}");
                     return null;
                 }
                 image = Image.WrapMemory<Bgra32>(pdata, w, h);

@@ -83,18 +83,14 @@ public class ProcessResources : Tool
             processors = procs.Select(k => allProcessors.SingleOrDefault(p => p.Key == k)!).ToArray();
             if(processors.Any(p => p is null))
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("There are invalid processor keys.");
-                Console.ResetColor();
+                ConsoleUI.WriteLineColor(ConsoleColor.Red, "There are invalid processor keys.");
                 return false;
             }
         }
 #if RELEASE
         if(processors.Length == 0)
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("No processors were selected.");
-            Console.ResetColor();
+            ConsoleUI.WriteLineColor(ConsoleColor.Red, "No processors were selected.");
             return false;
         }
 #endif

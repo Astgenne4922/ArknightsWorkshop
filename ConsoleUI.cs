@@ -36,9 +36,7 @@ public static class ConsoleUI
         foreach (var v in options)
         {
             Console.Write(keys[count]);
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.Write(" [ ]");
-            Console.ResetColor();
+            WriteColor(ConsoleColor.Red, " [ ]");
             Console.WriteLine($": {v}");
             count++;
         }
@@ -55,9 +53,10 @@ public static class ConsoleUI
             select[ind] = !select[ind];
             Console.CursorTop = line + ind;
             Console.CursorLeft = 2;
-            Console.ForegroundColor = select[ind] ? ConsoleColor.Green : ConsoleColor.Red;
-            Console.Write(select[ind] ? "[X]" : "[ ]");
-            Console.ResetColor();
+            if (select[ind])
+                WriteColor(ConsoleColor.Green, "[X]");
+            else
+                WriteColor(ConsoleColor.Red, "[ ]");
             Console.CursorLeft = endLeft;
             Console.CursorTop = endLine;
         }
@@ -91,24 +90,29 @@ public static class ConsoleUI
             var cands = dirs.Where(d => d.Name.StartsWith(resNamePrefix)).ToArray();
             if (cands.Length != 1)
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine(cands.Length switch
+                WriteLineColor(ConsoleColor.Red, cands.Length switch
                 {
                     0 => $"No resource version begin with '{resNamePrefix}'",
                     _ => $"Multiple resource versions begin with '{resNamePrefix}'"
                 });
-                Console.ResetColor();
                 return null;
             }
             return cands[0].Name;
         }
 
+        static void NoResError() => WriteLineColor(ConsoleColor.Red, "No resources downloaded.");
+    }
 
-        static void NoResError()
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("No resources downloaded.");
-            Console.ResetColor();
-        }
+    public static void WriteLineColor(ConsoleColor color, string line)
+    {
+        Console.ForegroundColor = color;
+        Console.WriteLine(line);
+        Console.ResetColor();
+    }
+    public static void WriteColor(ConsoleColor color, string line)
+    {
+        Console.ForegroundColor = color;
+        Console.Write(line);
+        Console.ResetColor();
     }
 }
